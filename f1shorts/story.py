@@ -75,9 +75,11 @@ def template_script(f: dict, seed: int = 0) -> list[str]:
     """Data-driven narration, ~75-95 words. Each item is one caption."""
     rnd = random.Random(seed)
     w, pod = f["winner"], f["podium"]
+    from datetime import datetime
+    ev = _short_event(f) if f["year"] >= datetime.now().year else f"{f['year']} {_short_event(f)}"
     s = [rnd.choice([
-        f"The {_short_event(f)}, the whole race in thirty seconds.",
-        f"{f['total_laps']} laps of the {_short_event(f)} in thirty seconds.",
+        f"The {ev}, the whole race in thirty seconds.",
+        f"{f['total_laps']} laps of the {ev} in thirty seconds.",
     ])]
     if w:
         if w["grid"] == 1 and f["lead_changes"] == 0:

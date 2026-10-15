@@ -86,9 +86,13 @@ def run(upload: bool) -> int:
             from .youtube import upload as yt_upload
             entry["video_id"] = yt_upload(video, meta["title"], meta["description"], meta["tags"])
             print(f"[up] https://youtube.com/shorts/{entry['video_id']}")
+            state["last_upload"] = entry["made"]
         state["posted"][tag] = entry
         save_state(state)  # save after each so a later failure can't cause a double post
         made += 1
+    if made == 0:
+        from .formats import run_extras
+        made += run_extras(state, upload)
     keepalive(state)
     save_state(state)
     print(f"[done] {made} new Short(s)")
@@ -101,7 +105,15 @@ def main() -> int:
     ap.add_argument("--no-upload", action="store_true")
     ap.add_argument("--no-voice", action="store_true")
     ap.add_argument("--race", nargs=3, metavar=("YEAR", "ROUND", "SESSION"))
+    ap.add_argument("--format", choices=("champ", "title", "h2h", "preview", "classic"))
+    ap.add_argument("--year", type=int)
     a = ap.parse_args()
+    if a.format:
+        from .formats import publish
+        state = load_state()
+        ok = publish(a.format, state, upload=not a.no_upload, year=a.year)
+        save_state(state)
+        return 0 if ok else 1
     if a.sample:
         from .sample import sample_race
         make_short(sample_race(3), "sample", voice=not a.no_voice)
