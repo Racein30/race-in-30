@@ -17,6 +17,14 @@ TEAM_COLORS = {
     "aston_martin": "#229971", "williams": "#64C4FF", "rb": "#6692FF", "racing_bulls": "#6692FF",
     "haas": "#B6BABD", "sauber": "#BB0A30", "audi": "#BB0A30", "alpine": "#0093CC",
     "cadillac": "#C0C0C0",
+    # older team names, for classic races
+    "alphatauri": "#4E7C9B", "toro_rosso": "#469BFF", "alfa": "#9B0000", "racing_point": "#F596C8",
+    "force_india": "#F596C8", "renault": "#FFF500", "lotus_f1": "#FFB800", "manor": "#ED1C24",
+    "marussia": "#6E0000", "caterham": "#005030", "virgin": "#CC0000", "hrt": "#B2945E",
+    "brawn": "#B8FD6E", "toyota": "#CC0000", "bmw_sauber": "#2C5FA8", "honda": "#FFFFFF",
+    "super_aguri": "#E2001A", "spyker": "#FF6600", "jordan": "#F5E32D", "minardi": "#191919",
+    "jaguar": "#00573F", "bar": "#E8E8E8", "prost": "#0033A0", "arrows": "#FF8000",
+    "benetton": "#00A0E3", "stewart": "#FFFFFF", "tyrrell": "#003399",
 }
 
 
