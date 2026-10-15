@@ -1,0 +1,74 @@
+name: F1 Shorts
+
+on:
+  schedule:
+    - cron: "23 */3 * * *"   # every 3 hours; exits in seconds when there's no new race
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "auto = normal run, sample = test video only (no upload)"
+        default: auto
+        type: choice
+        options: [auto, sample]
+
+permissions:
+  contents: write   # to commit state.json (prevents double posting)
+
+concurrency:
+  group: f1-shorts
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -r requirements.txt
+
+      - uses: actions/cache@v4
+        with:
+          path: .fastf1-cache
+          key: fastf1-${{ github.run_id }}
+          restore-keys: fastf1-
+
+      - name: Make Shorts
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CHANNEL_HANDLE: ${{ vars.CHANNEL_HANDLE }}
+          YT_PRIVACY: ${{ vars.YT_PRIVACY || 'public' }}
+        run: |
+          if [ "${{ inputs.mode }}" = "sample" ]; then
+            python -m f1shorts.main --sample
+          else
+            python -m f1shorts.main
+          fi
+
+      - name: Save state
+        if: always()
+        run: |
+          git config user.name "f1-shorts-bot"
+          git config user.email "f1-shorts-bot@users.noreply.github.com"
+          git add state.json
+          git diff --cached --quiet || (git commit -m "Update posted Shorts" && git push)
+
+      - name: Keep videos for 14 days
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shorts-${{ github.run_id }}
+          path: out/*.mp4
+          if-no-files-found: ignore
+          retention-days: 14
