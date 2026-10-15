@@ -137,3 +137,19 @@ def load_session(year: int, rnd: int, session: str) -> dict | None:
     return {"event": str(s.event["EventName"]), "year": year, "round": rnd,
             "session": session, "total_laps": total, "drivers": drivers,
             "fastest_lap": fastest}
+
+
+# Fallback: if F1's live-timing server won't serve laps, use the Jolpica API.
+_fastf1_load_session = load_session
+
+
+def load_session(year: int, rnd: int, session: str) -> dict | None:  # noqa: F811
+    try:
+        race = _fastf1_load_session(year, rnd, session)
+    except Exception as e:
+        print(f"[data] FastF1 lap data unavailable ({type(e).__name__}), trying Jolpica")
+        race = None
+    if race is None:
+        from .jolpica import load_session as jolpica_load
+        race = jolpica_load(year, rnd, session)
+    return race
