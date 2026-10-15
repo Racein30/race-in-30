@@ -6,12 +6,12 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "auto = normal run, sample = test video (no upload), race = make one specific race"
+        description: "auto = normal run, sample = test video (no upload), race = one specific race, champ/title/h2h/preview/classic = that format"
         default: auto
         type: choice
-        options: [auto, sample, race]
+        options: [auto, sample, race, champ, title, h2h, preview, classic]
       year:
-        description: "For mode=race: season, e.g. 2021"
+        description: "For race/champ/title/h2h: season, e.g. 2021 (blank = this season)"
         default: ""
       round:
         description: "For mode=race: round number, e.g. 22"
@@ -63,6 +63,12 @@ jobs:
             python -m f1shorts.main --sample
           elif [ "$MODE" = "race" ]; then
             python -m f1shorts.main --race "$RACE_YEAR" "$RACE_ROUND" Race
+          elif [ "$MODE" != "auto" ] && [ -n "$MODE" ]; then
+            if [ -n "$RACE_YEAR" ]; then
+              python -m f1shorts.main --format "$MODE" --year "$RACE_YEAR"
+            else
+              python -m f1shorts.main --format "$MODE"
+            fi
           else
             python -m f1shorts.main
           fi
