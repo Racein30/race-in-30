@@ -15,7 +15,7 @@ import urllib.request
 
 UA = {"User-Agent": "race-in-30/1.0 (https://racein30.github.io/race-in-30/)"}
 CACHE = os.environ.get("PHOTO_CACHE", ".photo-cache")
-OK_LICENCE = re.compile(r"^(CC BY|CC0|CC-BY|Public domain|PD)", re.I)
+OK_LICENCE = re.compile(r"^(CC BY|CC0|CC-BY|Public domain|PD|OGL)", re.I)
 
 
 def _json(url: str) -> dict:

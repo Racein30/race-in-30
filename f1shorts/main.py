@@ -109,7 +109,9 @@ def main() -> int:
     ap.add_argument("--year", type=int)
     a = ap.parse_args()
     if a.format:
+        from . import formats
         from .formats import publish
+        formats.FORCE = True
         state = load_state()
         ok = publish(a.format, state, upload=not a.no_upload, year=a.year)
         save_state(state)

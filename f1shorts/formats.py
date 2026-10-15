@@ -20,6 +20,7 @@ from . import cards, extras
 OUT = os.environ.get("OUT_DIR", "out")
 HANDLE = os.environ.get("CHANNEL_HANDLE", "")
 MIN_GAP_HOURS = float(os.environ.get("MIN_GAP_HOURS", "5"))
+FORCE = False  # manual runs remake even if already posted
 FORMATS = ("champ", "title", "h2h", "preview", "classic")
 
 
@@ -78,7 +79,7 @@ def build(fmt: str, state: dict, year: int | None = None, now: datetime | None =
         if not c:
             return None
         key = f"champ-{year}-R{len(c['rounds'])}"
-        if key in state["posted"]:
+        if key in state["posted"] and not FORCE:
             return None
         sentences, meta = extras.championship_story(c, seed)
         work = os.path.join(OUT, key)
@@ -93,7 +94,7 @@ def build(fmt: str, state: dict, year: int | None = None, now: datetime | None =
         if not t:
             return None
         key = f"title-{year}-R{t['round']}"
-        if key in state["posted"]:
+        if key in state["posted"] and not FORCE:
             return None
         sentences, meta = extras.title_story(t, seed)
         work = os.path.join(OUT, key)
@@ -107,7 +108,7 @@ def build(fmt: str, state: dict, year: int | None = None, now: datetime | None =
         if not t:
             return None
         key = f"h2h-{year}-R{t['rounds']}"
-        if key in state["posted"]:
+        if key in state["posted"] and not FORCE:
             return None
         sentences, meta = extras.teammates_story(t, seed)
         work = os.path.join(OUT, key)
@@ -121,7 +122,7 @@ def build(fmt: str, state: dict, year: int | None = None, now: datetime | None =
         if not p:
             return None
         key = f"preview-{year}-R{p['round']}"
-        if key in state["posted"]:
+        if key in state["posted"] and not FORCE:
             return None
         sentences, meta = extras.preview_story(p, seed)
         work = os.path.join(OUT, key)
