@@ -1,0 +1,4 @@
+out/
+.fastf1-cache/
+__pycache__/
+client_secret*.json
