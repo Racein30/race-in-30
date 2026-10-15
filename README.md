@@ -75,5 +75,3 @@ python -m f1shorts.main --race 2026 18 Race --no-upload   # any past race
 - YouTube refuses monetisation for mass-produced, repetitive content. One Short per
   session, each with a different race story, is fine. Adding more formats later
   (qualifying battles, speed-trace duels) makes the channel stronger.
-# race-in-30
-Automated 30-second F1 data Shorts
