@@ -299,3 +299,80 @@ def classic_round(season: int, circuit: str) -> int | None:
         if r["Circuit"]["circuitId"] == circuit:
             return int(r["round"])
     return None
+
+
+# ---------------------------------------------------------------- prediction
+def prediction(year: int, now: datetime | None = None) -> dict | None:
+    """Data-based podium pick for the next race: recent form + track record."""
+    now = now or datetime.now(timezone.utc)
+    upcoming = [r for r in schedule(year) if _race_dt(r) > now]
+    if not upcoming:
+        return None
+    nxt = upcoming[0]
+    results = _paged(f"{year}/results", "Results")
+    if len(results) < 3:
+        return None
+    recent = results[-5:]
+    drivers: dict[str, dict] = {}
+    for race in recent:
+        for row in race["Results"]:
+            d = row["Driver"]
+            dr = drivers.setdefault(d["driverId"], {
+                "id": d["driverId"], "code": _code(d), "last": d["familyName"],
+                "name": f"{d['givenName']} {d['familyName']}", "url": d.get("url", ""),
+                "team": row["Constructor"]["name"], "color": _color(row["Constructor"]["constructorId"]),
+                "pts": [], "fin": []})
+            dr["team"], dr["color"] = row["Constructor"]["name"], _color(row["Constructor"]["constructorId"])
+            dr["pts"].append(float(row.get("points", 0) or 0))
+            dr["fin"].append(int(row["position"]))
+    cid = nxt["Circuit"]["circuitId"]
+    hist = _get(f"circuits/{cid}/results", "limit=100&offset=0")
+    track: dict[str, list] = {}
+    wins: dict[str, int] = {}
+    seasons = sorted({int(r["season"]) for r in hist.get("RaceTable", {}).get("Races", [])})[-4:]
+    for r in hist.get("RaceTable", {}).get("Races", []):
+        if int(r["season"]) not in seasons:
+            continue
+        for row in r.get("Results", []):
+            did = row["Driver"]["driverId"]
+            track.setdefault(did, []).append(float(row.get("points", 0) or 0))
+            if row["position"] == "1":
+                wins[did] = wins.get(did, 0) + 1
+    ranked = []
+    for d in drivers.values():
+        form = sum(d["pts"]) / len(d["pts"])
+        trk = (sum(track[d["id"]]) / len(track[d["id"]])) if d["id"] in track else form * 0.8
+        d.update({"form": form, "track": trk, "wins_here": wins.get(d["id"], 0),
+                  "best": min(d["fin"]), "score": 0.7 * form + 0.3 * trk})
+        ranked.append(d)
+    ranked.sort(key=lambda d: -d["score"])
+    return {"year": year, "round": int(nxt["round"]), "name": nxt["raceName"], "date": _race_dt(nxt),
+            "podium": ranked[:3], "next": ranked[3:6], "races_used": len(recent), "seasons": seasons}
+
+
+def prediction_story(p: dict, seed: int) -> tuple[list[str], dict]:
+    gp = p["name"].replace("Grand Prix", "GP")
+    p1, p2, p3 = p["podium"]
+
+    def why(d):
+        bits = [f"averaging {d['form']:.0f} points over the last {p['races_used']} races"]
+        if d["wins_here"]:
+            bits.append(f"a {d['wins_here']}-time winner here" if d["wins_here"] > 1 else "a past winner here")
+        return ", ".join(bits)
+
+    s = [f"Who wins the {gp}? Here's what the data says.",
+         f"In third, {p3['last']}, {why(p3)}.",
+         f"In second, {p2['last']}, {why(p2)}.",
+         f"And the pick to win: {p1['last']}, {why(p1)}.",
+         "Agree? Drop your podium in the comments."]
+    title = f"{gp} {p['year']} Prediction: Who Wins? 🔮 {p1['last']}? #F1 #Shorts"
+    desc = "\n".join([f"A data-based podium prediction for the {p['year']} {p['name']}.", "",
+                      *[f"P{i+1}: {d['name']} ({d['team']}) - {d['form']:.1f} pts/race recently"
+                        for i, d in enumerate(p["podium"])], "",
+                      f"Method: 70% average points over the last {p['races_used']} races, "
+                      f"30% average points at this track ({', '.join(map(str, p['seasons']))}).",
+                      "Just for fun - it's maths, not a guarantee.", "",
+                      "Data: Jolpica F1 API. Unofficial fan channel, not affiliated with Formula 1 or the FIA.",
+                      "", "#F1 #Formula1 #Shorts #F1Predictions"])
+    tags = ["F1", "Formula 1", p["name"], f"{p['year']} F1", "F1 prediction", "F1 predictions", p1["last"], "Shorts"]
+    return s, {"title": title[:100], "description": desc, "tags": tags}

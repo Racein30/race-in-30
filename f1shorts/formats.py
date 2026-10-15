@@ -21,7 +21,7 @@ OUT = os.environ.get("OUT_DIR", "out")
 HANDLE = os.environ.get("CHANNEL_HANDLE", "")
 MIN_GAP_HOURS = float(os.environ.get("MIN_GAP_HOURS", "5"))
 FORCE = False  # manual runs remake even if already posted
-FORMATS = ("champ", "title", "h2h", "preview", "classic")
+FORMATS = ("champ", "title", "h2h", "preview", "predict", "classic")
 
 
 def _voice(sentences: list[str], work: str):
@@ -131,6 +131,22 @@ def build(fmt: str, state: dict, year: int | None = None, now: datetime | None =
         audio, caps, dur = _voice(sentences, work)
         video = os.path.join(OUT, f"{key}.mp4")
         cards.preview(p, caps, video, audio, dur, HANDLE)
+    elif fmt == "predict":
+        p = extras.prediction(year, now)
+        if not p:
+            return None
+        if not FORCE and p["date"] - now > timedelta(days=2):
+            return None
+        key = f"predict-{year}-R{p['round']}"
+        if key in state["posted"] and not FORCE:
+            return None
+        sentences, meta = extras.prediction_story(p, seed)
+        work = os.path.join(OUT, key)
+        os.makedirs(work, exist_ok=True)
+        imgs, credits = _photos(p["podium"])
+        audio, caps, dur = _voice(sentences, work)
+        video = os.path.join(OUT, f"{key}.mp4")
+        cards.prediction(p, caps, video, audio, dur, HANDLE, photos=imgs)
     else:
         raise ValueError(f"unknown format {fmt}")
 
@@ -168,7 +184,7 @@ def run_extras(state: dict, upload: bool, now: datetime | None = None) -> int:
         return 0
     year = now.year
     posted = state["posted"]
-    order = ["preview", "champ", "title", "h2h"]
+    order = ["preview", "predict", "champ", "title", "h2h"]
     if state.get("classic_day") != now.date().isoformat():
         order.append("classic")
     for fmt in order:

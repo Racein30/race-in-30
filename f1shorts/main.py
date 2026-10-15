@@ -50,8 +50,25 @@ def make_short(race: dict, tag: str, voice: bool = True) -> tuple[str, dict]:
         from .voice import proportional_captions
         dur = 31.0
         caps = proportional_captions(sentences, 0.3, dur - 0.6)
+    photos, credits = {}, []
+    try:
+        from .jolpica import _get
+        from .photos import headshot
+        rows = _get(f"{race['year']}/{race['round']}/results", "limit=100")["RaceTable"]["Races"][0]["Results"]
+        urls = {(r["Driver"].get("code") or r["Driver"]["familyName"][:3].upper()): r["Driver"].get("url", "")
+                for r in rows}
+        top3 = sorted([d for d in race["drivers"] if d["classified"]], key=lambda d: d["finish"])[:3]
+        for d in top3:
+            img, credit = headshot(urls.get(d["code"], "")) if urls.get(d["code"]) else (None, None)
+            if img is not None:
+                photos[d["code"]] = img
+                credits.append(credit)
+    except Exception as e:
+        print(f"[photos] podium photos unavailable: {e}")
+    if credits:
+        meta["description"] += "\n\nPhotos:\n" + "\n".join(credits)
     video = os.path.join(OUT, f"{tag}.mp4")
-    render.render(race, caps, video, audio_path=audio, duration=dur, handle=HANDLE, facts=f)
+    render.render(race, caps, video, audio_path=audio, duration=dur, handle=HANDLE, facts=f, photos=photos)
     with open(os.path.join(work, "meta.json"), "w") as fh:
         json.dump({"meta": meta, "script": sentences, "facts": f}, fh, indent=2, default=str)
     print(f"[ok] {video}\n     {meta['title']}")
@@ -105,7 +122,7 @@ def main() -> int:
     ap.add_argument("--no-upload", action="store_true")
     ap.add_argument("--no-voice", action="store_true")
     ap.add_argument("--race", nargs=3, metavar=("YEAR", "ROUND", "SESSION"))
-    ap.add_argument("--format", choices=("champ", "title", "h2h", "preview", "classic"))
+    ap.add_argument("--format", choices=("champ", "title", "h2h", "preview", "predict", "classic"))
     ap.add_argument("--year", type=int)
     a = ap.parse_args()
     if a.format:

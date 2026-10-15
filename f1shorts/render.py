@@ -39,7 +39,8 @@ def caption_at(captions: list[dict], t: float) -> str:
 
 
 def render(race: dict, captions: list[dict], out_path: str, audio_path: str | None = None,
-           duration: float | None = None, handle: str = "", facts: dict | None = None) -> str:
+           duration: float | None = None, handle: str = "", facts: dict | None = None,
+           photos: dict | None = None) -> str:
     total = race["total_laps"]
     drivers = sorted(race["drivers"], key=lambda d: (d["finish"] is None, d["finish"] or 99, d["grid"]))
     n = len(drivers)
@@ -122,16 +123,32 @@ def render(race: dict, captions: list[dict], out_path: str, audio_path: str | No
         t = fig.text(x, y, s, zorder=21, va="center", **kw)
         card.append(t)
         return t
+    photos = photos or {}
+
+    def cimg(img, x, y, w):
+        a = fig.add_axes([x - w / 2, y - w * W / H / 2, w, w * W / H], zorder=22)
+        a.imshow(img)
+        a.axis("off")
+        card.append(a)
+
     if podium:
         w = podium[0]
-        ctext(0.5, rows_y, "WINNER", color=MUTED, fontsize=26, fontweight="bold", ha="center")
-        ctext(0.5, rows_y - 0.048, w["last"].upper(), color=w["color"], fontsize=72, fontweight="bold",
-              ha="center")
-        ctext(0.5, rows_y - 0.092, f"{w['team']}  ·  from P{w['grid']}", color=FG, fontsize=26, ha="center")
-        y = rows_y - 0.15
+        if photos.get(w["code"]) is not None:
+            cimg(photos[w["code"]], 0.5, 0.748, 0.15)
+            ny = 0.668
+        else:
+            ctext(0.5, rows_y, "WINNER", color=MUTED, fontsize=26, fontweight="bold", ha="center")
+            ny = rows_y - 0.048
+        ctext(0.5, ny, w["last"].upper(), color=w["color"], fontsize=72, fontweight="bold", ha="center")
+        ctext(0.5, ny - 0.044, f"WINNER · {w['team']} · from P{w['grid']}", color=FG, fontsize=24, ha="center")
+        y = ny - 0.10
         for d in podium[1:]:
-            ctext(0.14, y, f"P{d['finish']}", color=MUTED, fontsize=34, fontweight="bold", ha="left")
-            ctext(0.27, y, d["last"].upper(), color=d["color"], fontsize=40, fontweight="bold", ha="left")
+            ctext(0.12, y, f"P{d['finish']}", color=MUTED, fontsize=34, fontweight="bold", ha="left")
+            nx = 0.27
+            if photos.get(d["code"]) is not None:
+                cimg(photos[d["code"]], 0.285, y, 0.07)
+                nx = 0.34
+            ctext(nx, y, d["last"].upper(), color=d["color"], fontsize=40, fontweight="bold", ha="left")
             y -= 0.052
         extra = []
         if facts and facts.get("biggest_gainer"):
@@ -216,7 +233,11 @@ def render(race: dict, captions: list[dict], out_path: str, audio_path: str | No
             a = _smooth(o / 0.45)
             for art in card:
                 art.set_visible(True)
-                art.set_alpha(a)
+                if hasattr(art, "images"):
+                    for im in art.images:
+                        im.set_alpha(a)
+                else:
+                    art.set_alpha(a)
             ax.set_alpha(1 - 0.6 * a)
         fig.canvas.draw()
         proc.stdin.write(fig.canvas.buffer_rgba().tobytes())

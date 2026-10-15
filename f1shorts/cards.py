@@ -90,7 +90,7 @@ def championship(c: dict, captions, out_path, audio_path=None, duration=None, ha
         vals.append(v)
         img = (photos or {}).get(d["id"])
         if img is not None:
-            ab = AnnotationBbox(OffsetImage(img, zoom=0.42), (0, 20), frameon=False, zorder=5,
+            ab = AnnotationBbox(OffsetImage(img, zoom=0.5), (0, 20), frameon=False, zorder=5,
                                 box_alignment=(0.5, 0.5), annotation_clip=False)
             ax.add_artist(ab)
             pics.append((i, ab))
@@ -115,9 +115,9 @@ def championship(c: dict, captions, out_path, audio_path=None, duration=None, ha
             labels[i].set_visible(v[i] > vmax * 0.09 and rank[i] <= top_n)
             off = vmax * 0.012
             if i in pic_of:
-                pic_of[i].xy = (v[i] + vmax * 0.045, y)
+                pic_of[i].xy = pic_of[i].xybox = (v[i] + vmax * 0.06, y)
                 pic_of[i].set_visible(rank[i] <= top_n)
-                off = vmax * 0.09
+                off = vmax * 0.125
             vals[i].set_position((v[i] + off, y))
             vals[i].set_text(_fmt(round(v[i] * 2) / 2) if rank[i] <= top_n else "")
         r = min(n, max(1, int(np.ceil(x)))) if x > 0 else 0
@@ -261,4 +261,54 @@ def preview(p: dict, captions, out_path, audio_path=None, duration=None, handle=
                 art.set_alpha(a)
         king.set_alpha(_smooth((t - INTRO - len(rows) * reveal) / 0.5))
 
+    return _encode(fig, cap, captions, duration, update, out_path, audio_path)
+
+
+# ------------------------------------------------------------- prediction podium
+def prediction(p: dict, captions, out_path, audio_path=None, duration=None, handle="", photos=None):
+    duration = _dur(captions, duration)
+    gp = p["name"].replace("Grand Prix", "GP").upper()
+    fig, cap = _frame(f"{gp} {p['year']}", "WHO WINS? THE DATA PICKS", handle)
+    fig.text(0.5, 0.858, p["date"].strftime("%a %d %b").upper() + " · PREDICTION", color=FG, fontsize=30,
+             fontweight="bold", ha="center", va="center")
+    # podium blocks: P2 left, P1 centre, P3 right
+    slots = [(0, 0.5, 0.20), (1, 0.18, 0.15), (2, 0.82, 0.11)]  # (podium idx, x centre, block height)
+    base, width = 0.36, 0.28
+    groups = []
+    for idx, xc, hgt in slots:
+        d = p["podium"][idx]
+        blk = FancyBboxPatch((xc - width / 2 + 0.01, base), width - 0.02, hgt,
+                             boxstyle="round,pad=0,rounding_size=0.01", transform=fig.transFigure,
+                             facecolor=d["color"], edgecolor="none")
+        fig.patches.append(blk)
+        num = fig.text(xc, base + hgt / 2, str(idx + 1), color=_ink_on(d["color"]), fontsize=80,
+                       fontweight="bold", ha="center", va="center")
+        top = base + hgt
+        name = fig.text(xc, top + 0.03, d["last"].upper(), color=FG, fontsize=30 if len(d["last"]) < 10 else 24,
+                        fontweight="bold", ha="center", va="center")
+        stat = fig.text(xc, top + 0.008, f"{d['form']:.1f} PTS/RACE", color=MUTED, fontsize=18,
+                        fontweight="bold", ha="center", va="center")
+        arts = [blk, num, name, stat]
+        img = (photos or {}).get(d["id"])
+        if img is not None:
+            ax = fig.add_axes([xc - 0.11, top + 0.05, 0.22, 0.124])
+            ax.imshow(img)
+            ax.axis("off")
+            arts.append(ax)
+        else:
+            code = fig.text(xc, top + 0.11, d["code"], color=d["color"], fontsize=60, fontweight="bold",
+                            ha="center", va="center")
+            arts.append(code)
+        groups.append((idx, arts))
+    groups.sort(key=lambda g: -g[0])  # reveal P3, P2, then P1
+    span = (duration - INTRO - OUTRO)
+    reveal_at = {2: INTRO + span * 0.18, 1: INTRO + span * 0.42, 0: INTRO + span * 0.66}
+
+    def update(t, dur):
+        for idx, arts in groups:
+            a = _smooth((t - reveal_at[idx]) / 0.5)
+            for art in arts:
+                art.set_alpha(a) if not hasattr(art, "images") else [im.set_alpha(a) for im in art.images]
+
+    update(0, duration)
     return _encode(fig, cap, captions, duration, update, out_path, audio_path)
