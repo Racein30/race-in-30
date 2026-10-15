@@ -6,10 +6,16 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "auto = normal run, sample = test video only (no upload)"
+        description: "auto = normal run, sample = test video (no upload), race = make one specific race"
         default: auto
         type: choice
-        options: [auto, sample]
+        options: [auto, sample, race]
+      year:
+        description: "For mode=race: season, e.g. 2021"
+        default: ""
+      round:
+        description: "For mode=race: round number, e.g. 22"
+        default: ""
 
 permissions:
   contents: write   # to commit state.json (prevents double posting)
@@ -49,9 +55,14 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CHANNEL_HANDLE: ${{ vars.CHANNEL_HANDLE }}
           YT_PRIVACY: ${{ vars.YT_PRIVACY || 'public' }}
+          MODE: ${{ inputs.mode }}
+          RACE_YEAR: ${{ inputs.year }}
+          RACE_ROUND: ${{ inputs.round }}
         run: |
-          if [ "${{ inputs.mode }}" = "sample" ]; then
+          if [ "$MODE" = "sample" ]; then
             python -m f1shorts.main --sample
+          elif [ "$MODE" = "race" ]; then
+            python -m f1shorts.main --race "$RACE_YEAR" "$RACE_ROUND" Race
           else
             python -m f1shorts.main
           fi
