@@ -1,0 +1,7 @@
+fastf1>=3.4
+matplotlib>=3.8
+numpy
+pandas
+edge-tts>=6.1
+google-api-python-client>=2.100
+google-auth>=2.23
