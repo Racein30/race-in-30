@@ -35,7 +35,22 @@ def _frame(title: str, subtitle: str, handle: str):
     return fig, cap
 
 
+NEXT_HERO: dict | None = None  # set by formats before a render: photo intro for the next video
+
+
 def _encode(fig, cap, captions, duration, update, out_path, audio_path=None):
+    global NEXT_HERO
+    hero = None
+    if NEXT_HERO:
+        from .hero import Hero
+        hero = Hero(fig, **NEXT_HERO)
+        NEXT_HERO = None
+        cap.set_zorder(60)
+        inner = update
+
+        def update(t, dur):  # noqa: F811
+            inner(t, dur)
+            hero.update(t, dur)
     frames = int(round(duration * FPS))
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", f"{W}x{H}",
            "-r", str(FPS), "-i", "-"]

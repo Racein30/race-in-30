@@ -48,6 +48,19 @@ def _photos(drivers: list[dict]):
     return imgs, credits
 
 
+def _hero(driver: dict, year: int, title: str, subtitle: str, name: str, credits: list, n: int = 2) -> None:
+    """Queue a full-screen photo intro of `driver` for the next card render."""
+    try:
+        from .photos import gallery
+        imgs, cr = gallery(driver.get("name") or driver.get("last", ""), year, n=n, wiki_url=driver.get("url", ""))
+        if imgs:
+            cards.NEXT_HERO = {"imgs": imgs, "title": title, "subtitle": subtitle, "name": name,
+                               "color": driver.get("color", "#FF2E3B")}
+            credits.extend(c for c in cr if c not in credits)
+    except Exception as e:
+        print(f"[hero] skipped: {type(e).__name__}: {e}")
+
+
 def build(fmt: str, state: dict, year: int | None = None, now: datetime | None = None):
     """Return (key, video_path, meta) or None if there's nothing to make."""
     now = now or datetime.now(timezone.utc)
@@ -86,6 +99,8 @@ def build(fmt: str, state: dict, year: int | None = None, now: datetime | None =
         os.makedirs(work, exist_ok=True)
         top = sorted(c["drivers"], key=lambda d: -max(d["cum"]))[:12]
         imgs, credits = _photos(top)
+        lead = max(c["drivers"], key=lambda d: d["cum"][-1])
+        _hero(lead, year, f"THE {year} TITLE FIGHT", "IN 30 SECONDS", lead["last"], credits)
         audio, caps, dur = _voice(sentences, work)
         video = os.path.join(OUT, f"{key}.mp4")
         cards.championship(c, caps, video, audio, dur, HANDLE, photos=imgs)
@@ -100,6 +115,8 @@ def build(fmt: str, state: dict, year: int | None = None, now: datetime | None =
         work = os.path.join(OUT, key)
         os.makedirs(work, exist_ok=True)
         credits = []
+        lead = t["rows"][0]
+        _hero(lead, year, "CAN ANYONE", "STILL CATCH HIM?", lead["last"], credits)
         audio, caps, dur = _voice(sentences, work)
         video = os.path.join(OUT, f"{key}.mp4")
         cards.title_maths(t, caps, video, audio, dur, HANDLE)
@@ -144,6 +161,9 @@ def build(fmt: str, state: dict, year: int | None = None, now: datetime | None =
         work = os.path.join(OUT, key)
         os.makedirs(work, exist_ok=True)
         imgs, credits = _photos(p["podium"])
+        fav = p["podium"][0]
+        _hero(fav, year, p["name"].replace("Grand Prix", "GP").upper(), "WHO WINS? THE DATA PICKS",
+              fav["last"] + "?", credits)
         audio, caps, dur = _voice(sentences, work)
         video = os.path.join(OUT, f"{key}.mp4")
         cards.prediction(p, caps, video, audio, dur, HANDLE, photos=imgs)
@@ -158,7 +178,11 @@ def build(fmt: str, state: dict, year: int | None = None, now: datetime | None =
         work = os.path.join(OUT, key)
         os.makedirs(work, exist_ok=True)
         from .photos import gallery
-        imgs, credits = gallery(t["leader"]["name"], year, n=4)
+        imgs, credits = gallery(t["leader"]["name"], year, n=4, wiki_url=t["leader"].get("url", ""))
+        if imgs:
+            cards.NEXT_HERO = {"imgs": imgs[::-1], "title": f"HOW {t['leader']['last'].upper()}",
+                               "subtitle": f"WINS THE {year} TITLE", "name": t["leader"]["last"],
+                               "color": t["leader"].get("color", "#FF2E3B")}
         audio, caps, dur = _voice(sentences, work)
         video = os.path.join(OUT, f"{key}.mp4")
         cards.clinch(t, caps, video, audio, dur, HANDLE, gallery=imgs)

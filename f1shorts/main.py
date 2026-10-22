@@ -50,7 +50,7 @@ def make_short(race: dict, tag: str, voice: bool = True) -> tuple[str, dict]:
         from .voice import proportional_captions
         dur = 31.0
         caps = proportional_captions(sentences, 0.3, dur - 0.6)
-    photos, credits = {}, []
+    photos, credits, hero = {}, [], None
     try:
         from .jolpica import _get
         from .photos import headshot
@@ -58,6 +58,20 @@ def make_short(race: dict, tag: str, voice: bool = True) -> tuple[str, dict]:
         urls = {(r["Driver"].get("code") or r["Driver"]["familyName"][:3].upper()): r["Driver"].get("url", "")
                 for r in rows}
         top3 = sorted([d for d in race["drivers"] if d["classified"]], key=lambda d: d["finish"])[:3]
+        try:
+            from .photos import gallery
+            w = top3[0]
+            full = next((f"{r['Driver']['givenName']} {r['Driver']['familyName']}" for r in rows
+                         if (r["Driver"].get("code") or r["Driver"]["familyName"][:3].upper()) == w["code"]),
+                        w.get("name") or w["last"])
+            gimgs, gcr = gallery(full, race["year"], n=2, wiki_url=urls.get(w["code"], ""))
+            if gimgs:
+                ttl = race["event"].replace("Grand Prix", "GP").upper()
+                hero = {"imgs": gimgs, "title": f"{ttl} {race['year']}", "subtitle": "THE RACE IN 30 SECONDS",
+                        "name": f"{w['last']} wins", "color": w["color"]}
+                credits.extend(gcr)
+        except Exception as e:
+            print(f"[hero] skipped: {type(e).__name__}: {e}")
         for d in top3:
             img, credit = headshot(urls.get(d["code"], "")) if urls.get(d["code"]) else (None, None)
             if img is not None:
@@ -68,7 +82,7 @@ def make_short(race: dict, tag: str, voice: bool = True) -> tuple[str, dict]:
     if credits:
         meta["description"] += "\n\nPhotos:\n" + "\n".join(credits)
     video = os.path.join(OUT, f"{tag}.mp4")
-    render.render(race, caps, video, audio_path=audio, duration=dur, handle=HANDLE, facts=f, photos=photos)
+    render.render(race, caps, video, audio_path=audio, duration=dur, handle=HANDLE, facts=f, photos=photos, hero=hero)
     with open(os.path.join(work, "meta.json"), "w") as fh:
         json.dump({"meta": meta, "script": sentences, "facts": f}, fh, indent=2, default=str)
     print(f"[ok] {video}\n     {meta['title']}")

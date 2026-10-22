@@ -92,15 +92,37 @@ def headshot(wiki_url: str, size: int = 160):
         return None, None
 
 
-def gallery(full_name: str, year: int, n: int = 4, width: int = 1400):
+def _commons_category(wiki_url: str) -> str | None:
+    """Commons category (Wikidata P373) for a Wikipedia article URL."""
+    try:
+        title = urllib.parse.unquote(wiki_url.rstrip("/").split("/wiki/")[-1])
+        host = urllib.parse.urlparse(wiki_url).netloc or "en.wikipedia.org"
+        q = urllib.parse.urlencode({"action": "query", "titles": title, "prop": "pageprops",
+                                    "ppprop": "wikibase_item", "redirects": 1, "format": "json"})
+        page = next(iter(_json(f"https://{host}/w/api.php?{q}")["query"]["pages"].values()))
+        qid = page["pageprops"]["wikibase_item"]
+        ent = _json(f"https://www.wikidata.org/wiki/Special:EntityData/{qid}.json")["entities"][qid]
+        return ent["claims"]["P373"][0]["mainsnak"]["datavalue"]["value"]
+    except Exception as e:
+        print(f"[photos] no Commons category for {wiki_url}: {type(e).__name__}")
+        return None
+
+
+_GALLERY_CACHE: dict = {}
+
+
+def gallery(full_name: str, year: int, n: int = 4, width: int = 1400, wiki_url: str = ""):
     """Up to n free-licensed Commons photos of a driver from one season.
     Returns (list of RGB numpy images, list of credits)."""
     import numpy as np
     from PIL import Image
 
+    key = (full_name, year, n, wiki_url)
+    if key in _GALLERY_CACHE:
+        return _GALLERY_CACHE[key]
     imgs, credits = [], []
     try:
-        cat = full_name.replace(" ", "_")
+        cat = ((_commons_category(wiki_url) if wiki_url else None) or full_name).replace(" ", "_")
         q = urllib.parse.urlencode({
             "action": "query", "format": "json", "generator": "search", "gsrnamespace": 6, "gsrlimit": 50,
             "gsrsearch": f'deepcategory:"{cat}" filetype:bitmap', "prop": "imageinfo",
@@ -145,4 +167,5 @@ def gallery(full_name: str, year: int, n: int = 4, width: int = 1400):
     except Exception as e:
         print(f"[photos] gallery for {full_name}: {type(e).__name__}: {e}")
     print(f"[photos] gallery {full_name} {year}: {len(imgs)} photo(s)")
+    _GALLERY_CACHE[key] = (imgs, credits)
     return imgs, credits

@@ -40,7 +40,7 @@ def caption_at(captions: list[dict], t: float) -> str:
 
 def render(race: dict, captions: list[dict], out_path: str, audio_path: str | None = None,
            duration: float | None = None, handle: str = "", facts: dict | None = None,
-           photos: dict | None = None) -> str:
+           photos: dict | None = None, hero: dict | None = None) -> str:
     total = race["total_laps"]
     drivers = sorted(race["drivers"], key=lambda d: (d["finish"] is None, d["finish"] or 99, d["grid"]))
     n = len(drivers)
@@ -163,6 +163,11 @@ def render(race: dict, captions: list[dict], out_path: str, audio_path: str | No
             y -= 0.045
     for a in card:
         a.set_visible(False)
+    hero_obj = None
+    if hero:
+        from .hero import Hero
+        hero_obj = Hero(fig, outro_from=duration - OUTRO, **hero)
+        cap.set_zorder(60)
 
     def lap_of(t: float) -> float:
         if t <= INTRO:
@@ -239,6 +244,10 @@ def render(race: dict, captions: list[dict], out_path: str, audio_path: str | No
                 else:
                     art.set_alpha(a)
             ax.set_alpha(1 - 0.6 * a)
+            if hero_obj is not None:
+                ax.patch.set_alpha(1 - a)
+        if hero_obj is not None:
+            hero_obj.update(t, duration)
         fig.canvas.draw()
         proc.stdin.write(fig.canvas.buffer_rgba().tobytes())
 
