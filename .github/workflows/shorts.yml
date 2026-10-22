@@ -9,7 +9,7 @@ on:
         description: "auto = normal run, sample = test video (no upload), race = one specific race, champ/title/h2h/preview/predict/classic = that format"
         default: auto
         type: choice
-        options: [auto, sample, race, champ, title, h2h, preview, predict, classic]
+        options: [auto, sample, race, champ, title, h2h, preview, predict, classic, clinch]
       year:
         description: "For race/champ/title/h2h: season, e.g. 2021 (blank = this season)"
         default: ""
