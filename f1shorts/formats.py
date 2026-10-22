@@ -21,7 +21,7 @@ OUT = os.environ.get("OUT_DIR", "out")
 HANDLE = os.environ.get("CHANNEL_HANDLE", "")
 MIN_GAP_HOURS = float(os.environ.get("MIN_GAP_HOURS", "5"))
 FORCE = False  # manual runs remake even if already posted
-FORMATS = ("champ", "title", "h2h", "preview", "predict", "classic")
+FORMATS = ("champ", "title", "h2h", "preview", "predict", "classic", "clinch")
 
 
 def _voice(sentences: list[str], work: str):
@@ -147,6 +147,21 @@ def build(fmt: str, state: dict, year: int | None = None, now: datetime | None =
         audio, caps, dur = _voice(sentences, work)
         video = os.path.join(OUT, f"{key}.mp4")
         cards.prediction(p, caps, video, audio, dur, HANDLE, photos=imgs)
+    elif fmt == "clinch":
+        t = extras.clinch(year)
+        if not t:
+            return None
+        key = f"clinch-{year}-R{t['round']}"
+        if key in state["posted"] and not FORCE:
+            return None
+        sentences, meta = extras.clinch_story(t, seed)
+        work = os.path.join(OUT, key)
+        os.makedirs(work, exist_ok=True)
+        from .photos import gallery
+        imgs, credits = gallery(t["leader"]["name"], year, n=4)
+        audio, caps, dur = _voice(sentences, work)
+        video = os.path.join(OUT, f"{key}.mp4")
+        cards.clinch(t, caps, video, audio, dur, HANDLE, gallery=imgs)
     else:
         raise ValueError(f"unknown format {fmt}")
 

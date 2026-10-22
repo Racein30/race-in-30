@@ -127,8 +127,8 @@ def title_maths(year: int, now: datetime | None = None) -> dict | None:
         rn = int(r["round"])
         if rn not in done_rounds:
             races_left += 1
-        if "Sprint" in r and rn not in sprint_done:
-            sprints_left += 1
+            if "Sprint" in r and rn not in sprint_done:
+                sprints_left += 1
     if races_left == 0:
         return None
     maxp = races_left * RACE_PTS + sprints_left * SPRINT_PTS
@@ -376,3 +376,151 @@ def prediction_story(p: dict, seed: int) -> tuple[list[str], dict]:
                       "", "#F1 #Formula1 #Shorts #F1Predictions"])
     tags = ["F1", "Formula 1", p["name"], f"{p['year']} F1", "F1 prediction", "F1 predictions", p1["last"], "Shorts"]
     return s, {"title": title[:100], "description": desc, "tags": tags}
+
+
+# ---------------------------------------------------------------- how the leader clinches
+RACE_TABLE = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1]
+SPRINT_TABLE = [8, 7, 6, 5, 4, 3, 2, 1]
+
+
+def _ordinal_pos(max_pts: float) -> str:
+    """Best race finish that scores no more than max_pts."""
+    for p, v in enumerate(RACE_TABLE, 1):
+        if v <= max_pts:
+            return f"P{p}"
+    return "out of the points"
+
+
+def clinch(year: int) -> dict | None:
+    """How the championship leader seals the title. Conditions are sufficient (strictly ahead),
+    so a tie on points (decided on countback) is never claimed as a clinch."""
+    c = championship(year)
+    if not c or c["complete"]:
+        return None
+    done = {r["round"] for r in c["rounds"]}
+    left = []
+    for r in schedule(year):
+        rn = int(r["round"])
+        if rn in done:
+            continue
+        sprint = "Sprint" in r
+        left.append({"round": rn, "name": r["raceName"].replace("Grand Prix", "GP"),
+                     "short": (r.get("Circuit", {}).get("Location", {}).get("locality") or r["raceName"]),
+                     "sprint": sprint, "max": RACE_PTS + (SPRINT_PTS if sprint else 0)})
+    if not left:
+        return None
+    order = sorted(c["drivers"], key=lambda d: -d["cum"][-1])
+    L = {**order[0], "pts": order[0]["cum"][-1]}
+    R = sum(w["max"] for w in left)
+    rivals = [{**d, "pts": d["cum"][-1], "gap": L["pts"] - d["cum"][-1]} for d in order[1:]]
+    alive = [r for r in rivals if r["gap"] < R + 1]  # could still draw level or pass
+    out = {"year": year, "round": max(done), "leader": L, "rival": rivals[0], "left": left, "remaining": R,
+           "decided": not alive, "alive": alive[:4]}
+    if not alive:
+        return out
+    # remaining points after each weekend
+    rem, after = R, []
+    for w in left:
+        rem -= w["max"]
+        after.append(rem)
+    out["after"] = after
+
+    # 1) earliest: leader wins everything next weekend
+    w0, r1 = left[0], after[0]
+    gain_pts = w0["max"]
+    needs = []
+    possible = True
+    for r in alive:
+        allowed = r["gap"] + gain_pts - r1 - 1  # rival may score at most this
+        if allowed < 0:
+            possible = False
+            break
+        if allowed < (SPRINT_TABLE[1] + RACE_TABLE[1] if w0["sprint"] else RACE_TABLE[1]):
+            needs.append({**r, "allowed": allowed,
+                          "finish": None if w0["sprint"] else _ordinal_pos(allowed)})
+    out["next"] = {"possible": possible, "weekend": w0, "needs": needs}
+
+    # 2) likely: leader wins every race, each rival takes the best of the rest (P2)
+    lead = {r["id"]: r["gap"] for r in alive}
+    out["lines"] = []
+    clinch_at = None
+    for i, w in enumerate(left):
+        g = RACE_TABLE[0] - RACE_TABLE[1] + ((SPRINT_TABLE[0] - SPRINT_TABLE[1]) if w["sprint"] else 0)
+        for k in lead:
+            lead[k] += g
+        min_lead = min(lead.values())
+        out["lines"].append(lead[rivals[0]["id"]] if rivals[0]["id"] in lead else min_lead)
+        if clinch_at is None and min_lead > after[i]:
+            clinch_at = i
+    out["likely"] = clinch_at
+
+    # 3) worst case: nearest rival wins everything that's left
+    r0 = alive[0]
+    need = r0["pts"] + R - L["pts"] + 1
+    n_races = len(left)
+    n_spr = sum(w["sprint"] for w in left)
+    every = None
+    for p in range(1, 11):
+        got = RACE_TABLE[p - 1] * n_races + (SPRINT_TABLE[p - 1] if p <= 8 else 0) * n_spr
+        if got >= need:
+            every = p
+    out["worst"] = {"need": max(0, need), "every": every, "rival": r0}
+    return out
+
+
+_WORDS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"]
+
+
+def clinch_story(t: dict, seed: int) -> tuple[list[str], dict]:
+    L, yr = t["leader"], t["year"]
+    nl = len(t["left"])
+    races = f"{nl} race{'s' if nl != 1 else ''}"
+    if t["decided"]:
+        s = [f"{L['last']} is the {yr} world champion.",
+             f"Nobody can catch him with {races} to go.",
+             "Was he the best driver this year? Tell me in the comments."]
+        title = f"{L['last']} Is the {yr} F1 World Champion 🏆 #F1 #Shorts"
+    else:
+        r0 = t["rival"]
+        s = [f"Here's exactly how {L['last']} wins the {yr} title.",
+             f"He leads {r0['last']} by {pts(r0['gap'])} points, with {races} and {t['remaining']} points left."]
+        nx = t["next"]
+        where = nx["weekend"]["short"]
+        if nx["possible"]:
+            bits = []
+            for r in nx["needs"][:2]:
+                if r["finish"] and r["finish"] != "out of the points":
+                    bits.append(f"{r['last']} must finish {_WORDS[int(r['finish'][1:]) - 1]} or lower")
+                elif r["finish"]:
+                    bits.append(f"{r['last']} doesn't score")
+                else:
+                    bits.append(f"{r['last']} scores {pts(r['allowed'])} or fewer")
+            s.append(f"He can win it this weekend in {where}.")
+            s.append("He has to win the race." if bits else "He just has to win.")
+            for b in bits:
+                s.append(b[0].upper() + b[1:] + ".")
+        else:
+            s.append(f"He can't seal it in {where}, but it's close.")
+        if t["likely"] is not None:
+            w = t["left"][t["likely"]]
+            s.append(f"If he keeps winning with {r0['last']} second, it's over in {w['short']}.")
+        wc = t["worst"]
+        if wc["every"]:
+            s.append(f"Worst case, {wc['rival']['last']} wins every race left.")
+            s.append(f"{L['last']} still only needs {wc['need']} points.")
+            s.append(f"{_WORDS[wc['every'] - 1].capitalize()} every race does it.")
+        else:
+            s.append(f"If {wc['rival']['last']} wins every race left, {L['last']} needs {wc['need']} points.")
+        s.append(f"Where does {L['last']} seal it? Comment below.")
+        s.append("Follow for the maths after every race.")
+        title = f"How {L['last']} Wins the {yr} F1 Title 🏆 Every Scenario #F1 #Shorts"
+    desc_lines = [f"Every way {L['name']} can clinch the {yr} Formula 1 world championship.", ""]
+    desc_lines += [f"{L['name']}: {pts(L['pts'])} pts"] + [f"{r['name']}: {pts(r['pts'])} pts ({pts(r['gap'])} behind)"
+                                                          for r in t.get("alive", [])]
+    desc_lines += ["", f"{t['remaining']} points left. A clinch here means strictly ahead on points "
+                   "(ties are decided on countback).",
+                   "Data: Jolpica F1 API. Unofficial fan channel, not affiliated with Formula 1 or the FIA.",
+                   "", "#F1 #Formula1 #Shorts #F1Data"]
+    tags = ["F1", "Formula 1", f"{yr} F1", "F1 title", "F1 championship", L["last"], f"{L['last']} champion",
+            "Shorts"]
+    return s, {"title": title[:100], "description": "\n".join(desc_lines), "tags": tags}

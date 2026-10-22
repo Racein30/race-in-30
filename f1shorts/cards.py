@@ -312,3 +312,180 @@ def prediction(p: dict, captions, out_path, audio_path=None, duration=None, hand
 
     update(0, duration)
     return _encode(fig, cap, captions, duration, update, out_path, audio_path)
+
+
+# ------------------------------------------------------------- how the leader clinches
+_ABBR = {"United States": "USA", "Mexico City": "MEX", "Brazil": "BRA", "São Paulo": "BRA", "Las Vegas": "LVG",
+         "Qatar": "QAT", "Abu Dhabi": "ABU", "Singapore": "SIN", "Japan": "JPN", "Azerbaijan": "AZE",
+         "Italian": "ITA", "Dutch": "NED", "Belgian": "BEL", "Hungarian": "HUN", "British": "GBR",
+         "Austrian": "AUT", "Spanish": "ESP", "Monaco": "MON", "Canadian": "CAN", "Miami": "MIA",
+         "Chinese": "CHN", "Australian": "AUS", "Saudi": "KSA", "Bahrain": "BHR", "Emilia": "IMO",
+         "Barcelona": "BAR", "Madrid": "MAD", "Brazilian": "BRA", "Japanese": "JPN"}
+
+
+def _abbr(name: str) -> str:
+    for k, v in _ABBR.items():
+        if name.startswith(k):
+            return v
+    return name[:3].upper()
+
+
+def _cap_time(captions, words, default):
+    for c in captions:
+        if any(w.lower() in c["text"].lower() for w in words):
+            return c["start"]
+    return default
+
+
+def clinch(t: dict, captions, out_path, audio_path=None, duration=None, handle="", gallery=None):
+    duration = _dur(captions, duration)
+    L = t["leader"]
+    fig, cap = _frame(f"HOW {L['last'].upper()} WINS", f"THE {t['year']} TITLE · EVERY SCENARIO", handle)
+    cap.set_position((0.5, 0.215))
+
+    # --- photo panel with slow zoom + crossfade
+    px = [0.0, 0.585, 1.0, 0.295]
+    aspect = (px[2] * W) / (px[3] * H)
+    panels = []
+    for img in (gallery or []):
+        ax = fig.add_axes(px, zorder=1)
+        h, w = img.shape[:2]
+        ax.imshow(img, extent=(0, w, h, 0), interpolation="bilinear")
+        ax.axis("off")
+        # crop window matching the panel aspect, centred slightly high
+        cw = min(w, h * aspect)
+        ch = cw / aspect
+        panels.append((ax, w, h, cw, ch))
+    # gradient so text on top stays readable
+    gax = fig.add_axes(px, zorder=2)
+    grad = np.zeros((64, 2, 4))
+    grad[..., :3] = [int(BG[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    grad[:, :, 3] = np.linspace(0.0, 1.0, 64)[:, None] ** 1.6
+    grad[:12, :, 3] = np.maximum(grad[:12, :, 3], np.linspace(0.55, 0.0, 12)[:, None])
+    gax.imshow(grad, aspect="auto", extent=(0, 1, 0, 1))
+    gax.set_xlim(0, 1)
+    gax.set_ylim(0, 1)
+    gax.axis("off")
+    if not panels:
+        fig.text(0.5, 0.74, L["code"], color=L["color"], fontsize=150, fontweight="bold", ha="center",
+                 va="center", zorder=3)
+    fig.text(0.06, 0.612, L["last"].upper(), color=FG, fontsize=44, fontweight="bold", va="center", zorder=3)
+    fig.text(0.06, 0.594 - 0.004, f"{_fmt(L['pts'])} PTS · LEADER", color=L["color"], fontsize=22,
+             fontweight="bold", va="center", zorder=3)
+    r0 = t["rival"]
+    fig.text(0.94, 0.612, f"-{_fmt(r0['gap'])}", color=ACCENT, fontsize=44, fontweight="bold", ha="right",
+             va="center", zorder=3)
+    fig.text(0.94, 0.590, f"TO {r0['last'].upper()}", color=MUTED, fontsize=22, fontweight="bold",
+             ha="right", va="center", zorder=3)
+
+    nl = len(t["left"])
+    fig.text(0.5, 0.560, f"{nl} RACE{'S' if nl != 1 else ''} LEFT · {t['remaining']} PTS ON THE TABLE",
+             color=FG, fontsize=24, fontweight="bold", ha="center", va="center")
+
+    span = duration - INTRO - OUTRO
+    tA = _cap_time(captions, ["this weekend", "can't seal"], INTRO + span * 0.25)
+    tB = _cap_time(captions, ["keeps winning"], INTRO + span * 0.5)
+    tC = _cap_time(captions, ["worst case"], INTRO + span * 0.72)
+
+    arts_chart, line = [], None
+    pill = fig.text(0.5, 0.345, "", color=FG, fontsize=25, fontweight="bold", ha="center", va="center",
+                    linespacing=1.2)
+    if not t["decided"]:
+        after = t["after"]
+        lines = t["lines"]
+        xs = np.arange(nl)
+        ymax = max(max(after + [t["remaining"]]), max(lines)) * 1.12
+        ax = fig.add_axes([0.08, 0.392, 0.84, 0.132])
+        ax.set_facecolor(BG)
+        ax.set_xlim(-0.6, nl - 0.4)
+        ax.set_ylim(0, ymax)
+        for s in ax.spines.values():
+            s.set_visible(False)
+        ax.set_yticks([])
+        ax.set_xticks(xs)
+        ax.set_xticklabels([_abbr(w["name"]) for w in t["left"]], color=MUTED, fontsize=18, fontweight="bold")
+        ax.tick_params(length=0, pad=6)
+        bars = ax.bar(xs, [0] * nl, width=0.62, color="#2A303C", zorder=2)
+        blabels = [ax.text(x, 0, "", color=MUTED, fontsize=15, fontweight="bold", ha="center", va="bottom")
+                   for x in xs]
+        line, = ax.plot([], [], color=L["color"], lw=4, marker="o", ms=11, zorder=4,
+                        markeredgecolor=BG, markeredgewidth=2)
+        star, = ax.plot([], [], "o", ms=22, color="#3DDC84", zorder=5, markeredgecolor=BG, markeredgewidth=3)
+        champ = ax.text(0, 0, "", color="#3DDC84", fontsize=18, fontweight="bold", ha="center", va="bottom",
+                        zorder=5)
+        legend = fig.text(0.5, 0.538, f"BARS = POINTS LEFT   ·   LINE = {L['last'].upper()}'S LEAD",
+                          color=MUTED, fontsize=15, fontweight="bold", ha="center", va="center")
+        legend.set_alpha(0)
+        likely = t["likely"]
+        nx = t["next"]
+        where = _abbr(nx["weekend"]["name"])
+        if nx["possible"]:
+            pill_a = f"FASTEST: {where} — WIN"
+            conds = []
+            for r in nx["needs"][:2]:
+                if r["finish"] and r["finish"].startswith("P"):
+                    conds.append(f"{r['code']} {r['finish']} OR LOWER")
+                elif r["finish"]:
+                    conds.append(f"{r['code']} NO POINTS")
+                else:
+                    conds.append(f"{r['code']} ≤{_fmt(r['allowed'])} PTS")
+            if conds:
+                pill_a += ", " + ", ".join(conds)
+        else:
+            pill_a = f"NOT YET IN {where}"
+        pill_b = (f"LIKELY: CHAMPION IN {_abbr(t['left'][likely]['name'])}" if likely is not None
+                  else "KEEP WINNING")
+        wc = t["worst"]
+        pill_c = (f"WORST CASE: P{wc['every']} EVERY RACE" if wc["every"] else f"WORST CASE: {wc['need']} PTS")
+
+    def update(tt, dur):
+        # photos: crossfade + slow push-in
+        n = len(panels)
+        if n:
+            seg = dur / n
+            for i, (ax, w, h, cw, ch) in enumerate(panels):
+                local = tt - i * seg
+                a = 1.0 if i == 0 and local < seg else 0.0
+                if i > 0:
+                    a = _smooth(local / 0.6)
+                if i < n - 1 and tt > (i + 1) * seg + 0.6:
+                    a = 0.0
+                for im in ax.images:
+                    im.set_alpha(a)
+                ax.set_visible(a > 0)
+                z = 1.0 + 0.10 * max(0.0, min(1.0, local / (seg + 0.6)))
+                vw, vh = cw / z, ch / z
+                cx = w / 2 + (0.04 * w if i % 2 else -0.04 * w) * (local / (seg + 0.6))
+                cy = h * 0.45
+                cx = min(max(cx, vw / 2), w - vw / 2)
+                cy = min(max(cy, vh / 2), h - vh / 2)
+                ax.set_xlim(cx - vw / 2, cx + vw / 2)
+                ax.set_ylim(cy + vh / 2, cy - vh / 2)
+        if t["decided"]:
+            pill.set_text("CHAMPION" if tt > INTRO else "")
+            return
+        g = _smooth((tt - tA + 0.3) / 1.2)
+        for i, b in enumerate(bars):
+            b.set_height(after[i] * g)
+            blabels[i].set_position((i, after[i] * g + ymax * 0.02))
+            blabels[i].set_text(str(after[i]) if g > 0.9 else "")
+        legend.set_alpha(g)
+        k = (tt - tB) / 2.5
+        if k > 0:
+            m = min(nl, int(k * nl) + 1)
+            line.set_data(np.arange(m), lines[:m])
+            if likely is not None and m > likely:
+                champ.set_position((likely, max(lines[likely], after[likely]) + ymax * 0.10))
+                champ.set_text("CHAMPION")
+                star.set_data([likely], [lines[likely]])
+        if tt >= tC:
+            pill.set_text(textwrap.fill(pill_c, 36))
+            pill.set_color("#FFB020")
+        elif tt >= tB:
+            pill.set_text(textwrap.fill(pill_b, 36))
+            pill.set_color("#3DDC84")
+        elif tt >= tA:
+            pill.set_text(textwrap.fill(pill_a, 36))
+            pill.set_color(FG)
+
+    return _encode(fig, cap, captions, duration, update, out_path, audio_path)

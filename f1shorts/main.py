@@ -122,7 +122,7 @@ def main() -> int:
     ap.add_argument("--no-upload", action="store_true")
     ap.add_argument("--no-voice", action="store_true")
     ap.add_argument("--race", nargs=3, metavar=("YEAR", "ROUND", "SESSION"))
-    ap.add_argument("--format", choices=("champ", "title", "h2h", "preview", "predict", "classic"))
+    ap.add_argument("--format", choices=("champ", "title", "h2h", "preview", "predict", "classic", "clinch"))
     ap.add_argument("--year", type=int)
     a = ap.parse_args()
     if a.format:

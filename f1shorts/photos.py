@@ -90,3 +90,59 @@ def headshot(wiki_url: str, size: int = 160):
         except Exception:
             pass
         return None, None
+
+
+def gallery(full_name: str, year: int, n: int = 4, width: int = 1400):
+    """Up to n free-licensed Commons photos of a driver from one season.
+    Returns (list of RGB numpy images, list of credits)."""
+    import numpy as np
+    from PIL import Image
+
+    imgs, credits = [], []
+    try:
+        cat = full_name.replace(" ", "_")
+        q = urllib.parse.urlencode({
+            "action": "query", "format": "json", "generator": "search", "gsrnamespace": 6, "gsrlimit": 50,
+            "gsrsearch": f'deepcategory:"{cat}" filetype:bitmap', "prop": "imageinfo",
+            "iiprop": "url|size|extmetadata", "iiurlwidth": width})
+        pages = list(_json(f"https://commons.wikimedia.org/w/api.php?{q}").get("query", {}).get("pages", {}).values())
+        surname = full_name.split()[-1].lower()
+        picks, seen = [], set()
+        for p in pages:
+            if "imageinfo" not in p:
+                continue
+            info, title = p["imageinfo"][0], p["title"][5:]
+            em = info.get("extmetadata", {})
+            lic = _strip_html(em.get("LicenseShortName", {}).get("value", ""))
+            date = _strip_html(em.get("DateTimeOriginal", {}).get("value", ""))
+            if not OK_LICENCE.match(lic) or "signature" in title.lower():
+                continue
+            if not (date.startswith(str(year)) or str(year) in title):
+                continue
+            if info.get("width", 0) < info.get("height", 1) * 1.2:  # landscape only
+                continue
+            group = re.sub(r"\s*\(.*", "", title)
+            score = (surname in title.lower(), "podium" not in title.lower() or group not in seen)
+            picks.append((score, date, title, group, info, lic, em))
+        picks.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        used_groups = {}
+        for score, date, title, group, info, lic, em in picks:
+            if used_groups.get(group, 0) >= 1 and len(picks) > n:
+                continue
+            try:
+                req = urllib.request.Request(info.get("thumburl") or info["url"], headers=UA)
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    im = Image.open(io.BytesIO(r.read())).convert("RGB")
+            except Exception as e:
+                print(f"[photos] skip {title}: {e}")
+                continue
+            imgs.append(np.asarray(im))
+            artist = _strip_html(em.get("Artist", {}).get("value", "")) or "Unknown"
+            credits.append(f"{title} by {artist}, {lic}, via Wikimedia Commons")
+            used_groups[group] = used_groups.get(group, 0) + 1
+            if len(imgs) >= n:
+                break
+    except Exception as e:
+        print(f"[photos] gallery for {full_name}: {type(e).__name__}: {e}")
+    print(f"[photos] gallery {full_name} {year}: {len(imgs)} photo(s)")
+    return imgs, credits
